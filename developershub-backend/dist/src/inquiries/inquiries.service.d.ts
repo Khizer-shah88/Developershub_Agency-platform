@@ -8,21 +8,21 @@ export declare class InquiriesService {
         id: string;
         name: string;
         email: string;
-        phone: string | null;
+        createdAt: Date;
         message: string;
+        phone: string | null;
         status: string;
         userId: string | null;
         serviceId: string | null;
-        createdAt: Date;
     }>;
     findAll(role?: string, userId?: string): import("@prisma/client").Prisma.PrismaPromise<({
         User: {
             id: string;
             name: string;
             email: string;
-            createdAt: Date;
             password: string;
             role: import("@prisma/client").$Enums.Role;
+            createdAt: Date;
             updatedAt: Date;
         };
         Service: {
@@ -39,22 +39,22 @@ export declare class InquiriesService {
         id: string;
         name: string;
         email: string;
-        phone: string | null;
+        createdAt: Date;
         message: string;
+        phone: string | null;
         status: string;
         userId: string | null;
         serviceId: string | null;
-        createdAt: Date;
     })[]>;
     updateStatus(id: string, status: string): import("@prisma/client").Prisma.Prisma__InquiryClient<{
         id: string;
         name: string;
         email: string;
-        phone: string | null;
+        createdAt: Date;
         message: string;
+        phone: string | null;
         status: string;
         userId: string | null;
         serviceId: string | null;
-        createdAt: Date;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
 }

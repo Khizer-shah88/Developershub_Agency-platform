@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigation } from '@/components/landing/navigation';
 import { blogApi } from '@/lib/api';
+import { resolveRole } from '@/lib/auth';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 type ApiBlogPost = {
@@ -29,6 +31,14 @@ type UiPost = {
   accent: string;
   author: string;
   imageUrl?: string;
+};
+
+type BlogForm = {
+  title: string;
+  slug: string;
+  content: string;
+  imageUrl: string;
+  author: string;
 };
 
 const CATEGORIES = ['All', 'Agency Notes', 'Engineering', 'Product', 'Design', 'Culture'];
@@ -131,6 +141,15 @@ function estimateReadTime(input: string) {
   const words = stripHtml(input).split(' ').filter(Boolean).length;
   const minutes = Math.max(3, Math.ceil(words / 220));
   return `${minutes} min read`;
+}
+
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 }
 
 function mapApiPostsToUi(posts: ApiBlogPost[]): UiPost[] {
@@ -293,29 +312,163 @@ function PostRow({ post, index }: { post: UiPost; index: number }) {
 }
 
 export default function BlogPage() {
+  const [apiPosts, setApiPosts] = useState<ApiBlogPost[]>([]);
   const [posts, setPosts] = useState<UiPost[]>(DEMO_POSTS);
   const [isLoading, setIsLoading] = useState(true);
-  const [source, setSource] = useState<'api' | 'demo'>('demo');
+  const [source, setSource] = useState<'api' | 'demo' | 'mixed'>('demo');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [blogForm, setBlogForm] = useState<BlogForm>({
+    title: '',
+    slug: '',
+    content: '',
+    imageUrl: '',
+    author: '',
+  });
 
-  useEffect(() => {
-    blogApi
-      .getAll()
-      .then((data: ApiBlogPost[]) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setPosts(mapApiPostsToUi(data));
+  const resetForm = () => {
+    setBlogForm({
+      title: '',
+      slug: '',
+      content: '',
+      imageUrl: '',
+      author: '',
+    });
+    setEditingPostId(null);
+  };
+
+  const loadPosts = async () => {
+    const data = (await blogApi.getAll()) as ApiBlogPost[];
+    if (Array.isArray(data)) {
+      setApiPosts(data);
+      if (data.length > 0) {
+        const apiUiPosts = mapApiPostsToUi(data);
+
+        if (apiUiPosts.length >= 4) {
+          setPosts(apiUiPosts);
           setSource('api');
           return;
         }
-        setPosts(DEMO_POSTS);
-        setSource('demo');
-      })
+
+        const needed = 4 - apiUiPosts.length;
+        const demoFill = DEMO_POSTS.filter(
+          (demoPost) => !apiUiPosts.some((apiPost) => apiPost.slug === demoPost.slug),
+        ).slice(0, needed);
+
+        setPosts([...apiUiPosts, ...demoFill]);
+        setSource('mixed');
+        return;
+      }
+    }
+    setPosts(DEMO_POSTS);
+    setSource('demo');
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userRaw = localStorage.getItem('user');
+
+    try {
+      const user = userRaw ? (JSON.parse(userRaw) as { role?: string }) : null;
+      setIsAdmin(resolveRole(user?.role, token) === 'ADMIN');
+    } catch {
+      setIsAdmin(false);
+    }
+
+    loadPosts()
       .catch(() => {
+        setApiPosts([]);
         setPosts(DEMO_POSTS);
         setSource('demo');
       })
       .finally(() => setIsLoading(false));
   }, []);
+
+  const onCreateOrUpdate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) {
+      toast.error('Only admin can manage blog posts.');
+      return;
+    }
+
+    const title = blogForm.title.trim();
+    const content = blogForm.content.trim();
+    const author = blogForm.author.trim() || 'Developer Hub Team';
+    const slug = (blogForm.slug.trim() || slugify(title)).trim();
+
+    if (!title || !content || !slug) {
+      toast.error('Title, slug and content are required.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        title,
+        slug,
+        content,
+        author,
+        imageUrl: blogForm.imageUrl.trim() || null,
+      };
+
+      if (editingPostId) {
+        await blogApi.update(editingPostId, payload);
+        toast.success('Blog post updated');
+      } else {
+        await blogApi.create(payload);
+        toast.success('Blog post created');
+      }
+
+      resetForm();
+      await loadPosts();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to save blog post';
+      toast.error(Array.isArray(message) ? message.join(', ') : message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const onEdit = (post: ApiBlogPost) => {
+    setEditingPostId(post.id);
+    setBlogForm({
+      title: post.title,
+      slug: post.slug,
+      content: post.content,
+      imageUrl: post.imageUrl || '',
+      author: post.author || '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const onDelete = async (postId: string) => {
+    if (!isAdmin) {
+      toast.error('Only admin can delete posts.');
+      return;
+    }
+
+    if (!window.confirm('Delete this blog post?')) return;
+
+    try {
+      await blogApi.remove(postId);
+      if (editingPostId === postId) {
+        resetForm();
+      }
+      await loadPosts();
+      toast.success('Blog post deleted');
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to delete blog post';
+      toast.error(Array.isArray(message) ? message.join(', ') : message);
+    }
+  };
 
   const featured = posts.find((post) => post.featured);
   const rest = posts.filter((post) => !post.featured);
@@ -352,11 +505,107 @@ export default function BlogPage() {
         <FadeUp delay={170}>
           <div className="mt-7 flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-border bg-card/70 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-              {source === 'api' ? 'Live content' : 'Demo content'}
+              {source === 'api'
+                ? 'Live content'
+                : source === 'mixed'
+                  ? 'Live + demo content'
+                  : 'Demo content'}
             </span>
             {isLoading ? <span className="font-mono text-xs text-muted-foreground">Syncing posts...</span> : null}
           </div>
         </FadeUp>
+
+        {isAdmin ? (
+          <FadeUp delay={200}>
+            <div className="mt-8 rounded-2xl border border-foreground/15 bg-background/70 p-5 backdrop-blur">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="font-display text-2xl tracking-tight">
+                  {editingPostId ? 'Edit blog post' : 'Create blog post'}
+                </h2>
+                {editingPostId ? (
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Cancel edit
+                  </Button>
+                ) : null}
+              </div>
+
+              <form onSubmit={onCreateOrUpdate} className="grid gap-3 md:grid-cols-2">
+                <input
+                  value={blogForm.title}
+                  onChange={(e) =>
+                    setBlogForm((prev) => ({
+                      ...prev,
+                      title: e.target.value,
+                      slug: prev.slug ? prev.slug : slugify(e.target.value),
+                    }))
+                  }
+                  placeholder="Post title"
+                  className="w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none"
+                  required
+                />
+                <input
+                  value={blogForm.slug}
+                  onChange={(e) => setBlogForm((prev) => ({ ...prev, slug: slugify(e.target.value) }))}
+                  placeholder="post-slug"
+                  className="w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none"
+                  required
+                />
+                <input
+                  value={blogForm.author}
+                  onChange={(e) => setBlogForm((prev) => ({ ...prev, author: e.target.value }))}
+                  placeholder="Author"
+                  className="w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none"
+                />
+                <input
+                  value={blogForm.imageUrl}
+                  onChange={(e) => setBlogForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
+                  placeholder="Image URL (optional)"
+                  className="w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none"
+                />
+                <textarea
+                  value={blogForm.content}
+                  onChange={(e) => setBlogForm((prev) => ({ ...prev, content: e.target.value }))}
+                  placeholder="Write post content..."
+                  rows={6}
+                  className="md:col-span-2 w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none"
+                  required
+                />
+                <div className="md:col-span-2 flex flex-wrap gap-2">
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? 'Saving...' : editingPostId ? 'Update post' : 'Create post'}
+                  </Button>
+                </div>
+              </form>
+
+              <div className="mt-5 space-y-2">
+                <p className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">Manage posts</p>
+                {apiPosts.length ? (
+                  apiPosts.map((post) => (
+                    <div
+                      key={post.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-foreground/10 px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{post.title}</p>
+                        <p className="text-xs text-muted-foreground">/{post.slug}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" onClick={() => onEdit(post)}>
+                          Edit
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={() => onDelete(post.id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">No API posts yet. Create your first post above.</p>
+                )}
+              </div>
+            </div>
+          </FadeUp>
+        ) : null}
       </section>
 
       <section className="mx-auto max-w-7xl border-t border-border/80 px-6 py-12">

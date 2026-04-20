@@ -7,6 +7,37 @@ import { toast } from 'sonner';
 import { CalendarIcon } from 'lucide-react';
 import { appointmentsApi, paymentsApi, Service, servicesApi } from '@/lib/api';
 
+const FALLBACK_SERVICE_OPTIONS: Service[] = [
+  {
+    id: 'fallback-web-app',
+    title: 'Web App Development',
+    description: 'Modern web application design and implementation',
+    category: 'Engineering',
+    price: null,
+  },
+  {
+    id: 'fallback-mobile-app',
+    title: 'Mobile App Development',
+    description: 'Cross-platform and native mobile product delivery',
+    category: 'Engineering',
+    price: null,
+  },
+  {
+    id: 'fallback-ui-ux',
+    title: 'UI/UX Design',
+    description: 'Product UX strategy and interface design',
+    category: 'Design',
+    price: null,
+  },
+  {
+    id: 'fallback-consultation',
+    title: 'Consultation Session',
+    description: 'Discuss your goals and next technical steps',
+    category: 'Consultation',
+    price: null,
+  },
+];
+
 export default function BookingForm() {
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<string>('');
@@ -17,12 +48,35 @@ export default function BookingForm() {
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [servicesLoading, setServicesLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    servicesApi.getAll()
-      .then((res) => setServices(res))
-      .catch(() => toast.error('Failed to load services'));
+    const loadServices = async () => {
+      try {
+        const res = await servicesApi.getAll();
+        if (Array.isArray(res) && res.length > 0) {
+          setServices(res);
+          return;
+        }
+
+        // Defensively support inconsistent API envelopes.
+        const nested = (res as any)?.data || (res as any)?.services;
+        if (Array.isArray(nested) && nested.length > 0) {
+          setServices(nested);
+          return;
+        }
+
+        setServices(FALLBACK_SERVICE_OPTIONS);
+      } catch {
+        setServices(FALLBACK_SERVICE_OPTIONS);
+        toast.error('Failed to load services from API. Showing default options.');
+      } finally {
+        setServicesLoading(false);
+      }
+    };
+
+    loadServices();
   }, []);
 
   const handleBooking = async (e: React.FormEvent) => {
@@ -32,20 +86,29 @@ export default function BookingForm() {
       return;
     }
 
+    if (!name.trim() || !email.trim()) {
+      toast.error('Please provide your name and email');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const dateTime = new Date(date);
-      const [hours, minutes] = time.split(':');
-      dateTime.setHours(parseInt(hours), parseInt(minutes));
+      const [year, month, day] = date.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      const dateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+      const normalizedServiceId = selectedService.startsWith('fallback-')
+        ? undefined
+        : selectedService;
 
       const appointment = await appointmentsApi.create({
-        name,
-        email,
-        phone,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
         dateTime: dateTime.toISOString(),
-        serviceId: selectedService,
-        notes,
+        serviceId: normalizedServiceId,
+        notes: notes.trim() || undefined,
       });
 
       const selectedServiceData = services.find((s) => s.id === selectedService);
@@ -62,7 +125,8 @@ export default function BookingForm() {
       toast.success('Booking confirmed!');
       router.push('/appointments');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Booking failed');
+      const message = error?.response?.data?.message || error?.message || 'Booking failed';
+      toast.error(Array.isArray(message) ? message.join(', ') : message);
     } finally {
       setLoading(false);
     }
@@ -82,12 +146,17 @@ export default function BookingForm() {
                 <select
                   value={selectedService}
                   onChange={(e) => setSelectedService(e.target.value)}
+                  required
                   className="h-12 w-full rounded-xl border border-foreground/20 bg-background/70 px-4 text-foreground outline-none focus:border-foreground/40 focus:ring-2 focus:ring-foreground/10"
                 >
-                  <option value="">Select a service</option>
+                  <option value="" disabled>
+                    {servicesLoading ? 'Loading services...' : 'Select a service'}
+                  </option>
                   {services.map((service) => (
                     <option key={service.id} value={service.id}>
-                      {service.title} {service.price ? `($${service.price})` : ''}
+                      {service.title}
+                      {service.category ? ` (${service.category})` : ''}
+                      {typeof service.price === 'number' ? ` - $${service.price}` : ''}
                     </option>
                   ))}
                 </select>
@@ -168,7 +237,7 @@ export default function BookingForm() {
               <Button
                 type="submit"
                 className="w-full h-12 text-base font-medium"
-                disabled={loading}
+                disabled={loading || servicesLoading || services.length === 0}
               >
                 {loading ? 'Processing...' : 'Proceed to Booking'}
               </Button>

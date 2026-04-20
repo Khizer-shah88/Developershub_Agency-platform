@@ -5,52 +5,57 @@ import { Copy, Check } from "lucide-react";
 
 const codeExamples = [
   {
-    label: "Install",
-    code: `npm install @developerhub/sdk
+    label: "Book Appointment",
+    code: `const payload = {
+  name: "Alex Carter",
+  email: "alex@startup.com",
+  serviceId: selectedServiceId,
+  dateTime: new Date(formDate).toISOString(),
+  notes: "Need MVP architecture support"
+};
 
-# or
-yarn add @developerhub/sdk
-pnpm add @developerhub/sdk`,
+await appointmentsApi.create(payload);`,
   },
   {
-    label: "Initialize",
-    code: `import { DeveloperHub } from '@developerhub/sdk'
+    label: "Send Inquiry",
+    code: `const payload = {
+  name: "Alex Carter",
+  email: "alex@startup.com",
+  message: "I need a scalable web platform.",
+  serviceId: selectedServiceId || undefined
+};
 
-const developerHub = new DeveloperHub({
-  apiKey: process.env.DEVELOPER_HUB_KEY
-})`,
+await inquiriesApi.create(payload);`,
   },
   {
-    label: "Deploy",
-    code: `const app = await developerHub.deploy({
-  name: 'my-app',
-  region: 'auto',
-  scaling: {
-    min: 1,
-    max: 100
-  }
-})
+    label: "Admin Update",
+    code: `await blogApi.create({
+  title: "How we launched in 6 weeks",
+  slug: "launched-in-6-weeks",
+  content: markdownOrHtml,
+  author: "DevelopersHub Team"
+});
 
-console.log('Live at:', app.url)`,
+await appointmentsApi.updateStatus(id, "confirmed");`,
   },
 ];
 
 const features = [
   { 
-    title: "TypeScript native", 
-    description: "Full type safety with auto-generated types."
+    title: "Real business workflows", 
+    description: "Inquiries, appointments, and follow-ups in one platform."
   },
   { 
-    title: "Zero config", 
-    description: "Sensible defaults that just work."
+    title: "Role-based access", 
+    description: "Separate client and admin capabilities with guarded routes."
   },
   { 
-    title: "Edge-ready", 
-    description: "Runs anywhere: Node, Deno, Bun, browsers."
+    title: "Content + operations",  
+    description: "Manage services, portfolio, and blog from the admin side."
   },
   { 
-    title: "12KB gzipped", 
-    description: "Lightweight with zero dependencies."
+    title: "Realtime-ready", 
+    description: "Live notifications for new inquiries and appointments."
   },
 ];
 
@@ -119,16 +124,16 @@ export function DevelopersSection() {
           >
             <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
               <span className="w-8 h-px bg-foreground/30" />
-              For developers
+              Platform workflows
             </span>
             <h2 className="text-4xl lg:text-6xl font-display tracking-tight mb-8">
-              Built by devs.
+              Built for modern
               <br />
-              <span className="text-muted-foreground">For devs.</span>
+              <span className="text-muted-foreground">digital agencies.</span>
             </h2>
             <p className="text-xl text-muted-foreground mb-12 leading-relaxed">
-              A thoughtfully designed SDK that gets out of your way. 
-              Ship faster with intuitive APIs and exceptional documentation.
+              From first inquiry to confirmed appointment, DevelopersHub helps teams
+              capture demand, manage execution, and keep clients informed.
             </p>
             
             {/* Features */}
@@ -219,11 +224,11 @@ export function DevelopersSection() {
             
             {/* Links */}
             <div className="mt-6 flex items-center gap-6 text-sm">
-              <a href="#" className="text-foreground hover:underline underline-offset-4">
-                Read the docs
+              <a href="/services" className="text-foreground hover:underline underline-offset-4">
+                Explore services
               </a>
               <span className="text-foreground/20">|</span>
-              <a href="#" className="text-muted-foreground hover:text-foreground">
+              <a href="https://github.com/Khizer-shah88/Developershub_Agency-platform" target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
                 View on GitHub
               </a>
             </div>
