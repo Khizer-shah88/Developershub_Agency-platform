@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
-export default function ResetPasswordPage() {
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = useMemo(() => searchParams.get('token') || '', [searchParams]);
@@ -35,7 +37,7 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
-      await axios.post('http://localhost:5000/auth/reset-password', {
+      await axios.post(`${API_BASE_URL}/auth/reset-password`, {
         token,
         newPassword,
       });
@@ -78,5 +80,13 @@ export default function ResetPasswordPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-background" />}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
