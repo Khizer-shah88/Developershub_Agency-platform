@@ -1,24 +1,38 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PaymentsService {
-  private stripe: any;
+  private readonly logger = new Logger(PaymentsService.name);
+  private stripe: any | null = null;
 
   constructor(private prisma: PrismaService) {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
+    if (!stripeSecretKey) {
+      this.logger.warn(
+        'Payments are disabled because STRIPE_SECRET_KEY is not configured.',
+      );
+      return;
+    }
+
     const StripeConstructor = require('stripe');
-    this.stripe = new StripeConstructor(process.env.STRIPE_SECRET_KEY!, {
+    this.stripe = new StripeConstructor(stripeSecretKey, {
       apiVersion: '2024-06-20',
     });
   }
 
   async createCheckoutSession(body: { appointmentId: string; amount: number }) {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new BadRequestException('STRIPE_SECRET_KEY is not configured');
+    if (!this.stripe) {
+      throw new ServiceUnavailableException(
+        'Payments are disabled for this deployment',
+      );
     }
 
     if (!body?.appointmentId || !body?.amount || body.amount <= 0) {
