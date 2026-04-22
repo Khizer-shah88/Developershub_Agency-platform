@@ -1,0 +1,12 @@
+{
+  "name": "developershub-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "build": "npm --prefix developershub-backend ci && npm --prefix developershub-backend run prisma:generate && npm --prefix developershub-backend run build",
+    "start": "npm --prefix developershub-backend run start:prod"
+  }
+}
