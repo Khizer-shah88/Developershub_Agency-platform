@@ -10,16 +10,26 @@ async function bootstrap() {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  const allowedOrigins = Array.from(
-    new Set([
-      'http://localhost:3000',
-      'https://developershub-agency-frontend-7exw-fksptp7o4.vercel.app',
-      ...envOrigins,
-    ]),
-  );
+
+  const allowedOrigins = new Set([
+    'http://localhost:3000',
+    'https://developershub-agency-frontend-7exw-fksptp7o4.vercel.app',
+    ...envOrigins,
+  ]);
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const isAllowed =
+        allowedOrigins.has(origin) ||
+        /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
+
+      callback(null, isAllowed);
+    },
     credentials: true,
   });
 
