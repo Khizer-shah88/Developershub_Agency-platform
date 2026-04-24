@@ -13,7 +13,7 @@ async function bootstrap() {
   const allowedOrigins = Array.from(
     new Set([
       'http://localhost:3000',
-      'https://developershub-frontend.vercel.app',
+      'https://developershub-agency-frontend-7exw-fksptp7o4.vercel.app',
       ...envOrigins,
     ]),
   );
